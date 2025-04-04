@@ -74,7 +74,7 @@ def get_medmnist_dataset(data_flag, download=True):
     os.makedirs(data_dir, exist_ok=True)
     
     # Check if dataset exists
-    dataset_exists = os.path.exists(os.path.join(data_dir, f'{data_flag}_train.npz'))
+    dataset_exists = os.path.exists(os.path.join(data_dir, f'{data_flag}.npz'))
     
     # Data transforms
     data_transform = transforms.Compose([
@@ -88,6 +88,9 @@ def get_medmnist_dataset(data_flag, download=True):
         download = False
     else:
         print(f"Downloading {data_flag} dataset to {data_dir}")
+    
+    # 设置环境变量，强制MedMNIST使用我们的数据目录
+    os.environ['MEDMNIST_DATASET_FOLDER'] = data_dir
     
     train_dataset = DataClass(split='train', transform=data_transform, download=download, root=data_dir)
     val_dataset = DataClass(split='val', transform=data_transform, download=download, root=data_dir)

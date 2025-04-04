@@ -10,6 +10,8 @@ import matplotlib.pyplot as plt
 import os
 from utils.data_utils import get_medmnist_dataset
 import torchvision.utils as vutils
+import argparse
+import medmnist
 
 def get_model(model_name, in_channels, num_classes):
     """
@@ -79,7 +81,7 @@ def predict_image(model_path, image_path, data_flag, model_name, device='cuda'):
         outputs = model(image_tensor)
         
         if task == 'multi-label, binary-class':
-            predicted = (outputs > 0).float()
+            predicted = (torch.sigmoid(outputs) > 0.5).float()
             probabilities = torch.sigmoid(outputs)
         else:
             probabilities = torch.softmax(outputs, dim=1)
@@ -111,11 +113,11 @@ def predict_image(model_path, image_path, data_flag, model_name, device='cuda'):
     plt.xticks(range(n_classes), [info['label'][str(i)] for i in range(n_classes)], rotation=45)
     
     plt.tight_layout()
-    plt.savefig(f'prediction_{model_name}.png')
+    plt.savefig(f'prediction_{data_flag}_{model_name}.png')
     plt.close()
     
     # Save prediction details to file
-    with open(f'prediction_details_{model_name}.txt', 'w') as f:
+    with open(f'prediction_details_{data_flag}_{model_name}.txt', 'w') as f:
         f.write(f'Model: {model_name}\n')
         f.write(f'Dataset: {data_flag}\n')
         f.write(f'Task: {task}\n\n')
@@ -134,28 +136,73 @@ def predict_image(model_path, image_path, data_flag, model_name, device='cuda'):
     return predicted_classes if task == 'multi-label, binary-class' else predicted_class, probabilities
 
 if __name__ == '__main__':
+    # Add command-line arguments
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--data_flag', type=str, default='chestmnist',
+                      help='Dataset name, e.g., pathmnist, chestmnist, etc.')
+    parser.add_argument('--model_name', type=str, default='cnn',
+                      help='Model name: cnn, resnet18, resnet34')
+    args = parser.parse_args()
+    
     # Configuration
-    data_flag = 'pathmnist'  # Change this to use different MedMNIST datasets
-    model_name = 'resnet18'  # Choose from: 'cnn', 'resnet18', 'resnet34'
-    model_path = f'best_model_{model_name}.pth'
+    data_flag = args.data_flag
+    model_name = args.model_name
+    model_path = f'saved_models/{data_flag}/best_model_{data_flag}_{model_name}.pth'
     device = torch.device('cuda' if torch.cuda.is_available() else 'cpu')
     
     # Check if model file exists
     if not os.path.exists(model_path):
-        print(f"Error: Model file '{model_path}' not found!")
-        print("Please train the model first by running 'python run.py'")
+        print(f"Error: Model file {model_path} does not exist. Please train the model first.")
         exit(1)
+    
+    # Check if dataset exists
+    try:
+        info = INFO[data_flag]
+    except KeyError:
+        print(f"Error: Dataset {data_flag} does not exist. Available datasets:")
+        print(list(INFO.keys()))
+        exit(1)
+    
+    # Ensure the dataset directory exists
+    data_dir = os.path.join('data', data_flag)
+    os.makedirs(data_dir, exist_ok=True)
+    
+    # Set environment variable to force MedMNIST to use our data directory
+    os.environ['MEDMNIST_DATASET_FOLDER'] = data_dir
+    
+    # Check if dataset file exists
+    dataset_file = os.path.join(data_dir, f'{data_flag}.npz')
+    if not os.path.exists(dataset_file):
+        print(f"Downloading {data_flag} dataset...")
+        try:
+            # Attempt to download the dataset
+            DataClass = getattr(medmnist, info['python_class'])
+            _ = DataClass(split='train', download=True, root=data_dir)
+            print(f"Dataset {data_flag} downloaded successfully")
+        except Exception as e:
+            print(f"Error while downloading dataset: {str(e)}")
+            print("Please check your network connection or try downloading the dataset manually")
+            exit(1)
     
     # Get dataset and save a sample image
     _, _, test_dataset, _ = get_medmnist_dataset(data_flag)
-    sample_label = save_sample_image(test_dataset, 'sample_image.png')
+    sample_label = save_sample_image(test_dataset, f'sample_image_{data_flag}.png')
     
     # Make prediction
-    prediction, probabilities = predict_image(model_path, 'sample_image.png', data_flag, model_name, device)
+    prediction, probabilities = predict_image(model_path, f'sample_image_{data_flag}.png', data_flag, model_name, device)
     
     # Print results
-    print(f'\nPrediction Results for {model_name}:')
-    print(f'True Label: {INFO[data_flag]["label"][str(sample_label.item())]}')
+    print(f'\nPrediction Results ({data_flag}, {model_name}):')
+    
+    # Process the true label
+    if info['task'] == 'multi-label, binary-class':
+        true_labels = [info['label'][i] for i in range(len(info['label'])) if sample_label[i] == 1]
+        print('True Labels:')
+        for label in true_labels:
+            print(f'- {label}')
+    else:
+        print(f'True Label: {info["label"][str(sample_label.item())]}')
+    
     if isinstance(prediction, list):
         print('Predicted Classes:')
         for class_name in prediction:
@@ -163,7 +210,6 @@ if __name__ == '__main__':
     else:
         print(f'Predicted Class: {prediction}')
     
-    print('\nProbabilities:')
-    info = INFO[data_flag]
+    print('\nProbability Distribution:')
     for i in range(len(info['label'])):
-        print(f'{info["label"][str(i)]}: {probabilities[i]:.4f}') 
+        print(f'{info["label"][str(i)]}: {probabilities[i]:.4f}')
