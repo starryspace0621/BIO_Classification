@@ -1,6 +1,6 @@
 # Medical Image Classification Project
 
-A PyTorch-based medical image classification project using the MedMNIST dataset. The project supports multiple deep learning model architectures, including simple CNN and ResNet series models.
+A PyTorch-based medical image classification project using the MedMNIST dataset. The project supports multiple deep learning model architectures, including simple CNN and ResNet series models, and now supports all 2D datasets.
 
 ## Project Structure
 
@@ -10,6 +10,7 @@ A PyTorch-based medical image classification project using the MedMNIST dataset.
 ├── models/                 # Model definitions
 │   ├── simple_cnn.py      # Simple CNN model
 │   └── resnet.py          # ResNet models
+├── saved_models/          # Model Pth
 ├── utils/                  # Utility functions
 │   └── data_utils.py      # Data processing utilities
 ├── run.py                 # Training script
@@ -49,11 +50,11 @@ pip install -r requirements.txt
 Use `run.py` to train models:
 
 ```bash
-python run.py
+python run.py --data_flag <dataset_name> --model_name <model_name> --batch_size <batch_size> --num_epochs <num_epochs> --learning_rate <learning_rate>
 ```
 
-You can configure training by modifying the following parameters in `run.py`:
-- `data_flag`: Select dataset ('pathmnist', 'chestmnist', 'dermamnist', 'octmnist', etc.)
+You can configure training by modifying the following parameters:
+- `data_flag`: Select dataset ('pathmnist', 'chestmnist', 'dermamnist', 'octmnist', 'pneumoniamnist', 'retinamnist', 'breastmnist', 'bloodmnist', 'tissuemnist', 'organamnist', 'organcmnist'.)
 - `model_name`: Choose model ('cnn', 'resnet18', 'resnet34')
 - `batch_size`: Batch size
 - `num_epochs`: Number of training epochs
@@ -78,7 +79,7 @@ The testing script will:
 Use `predict.py` to predict single images:
 
 ```bash
-python predict.py
+python predict.py --data_flag <dataset_name> --model_name <model_name> --image_path <image_path>
 ```
 
 The prediction script will:
@@ -119,16 +120,16 @@ Each dataset has its specific:
 ## Output Files
 
 1. Training Process:
-   - `best_model_{model_name}.pth`: Saved best model weights
+   - `saved_models/<data_flag>/best_model_<data_flag>_<model_name>.pth`: Saved best model weights
 
 2. Testing Results:
-   - `test_metrics_{model_name}.txt`: Test metrics (accuracy, precision, recall, F1 score)
-   - `confusion_matrix_{model_name}.png`: Confusion matrix visualization
+   - `test_metrics_<model_name>.txt`: Test metrics (accuracy, precision, recall, F1 score)
+   - `confusion_matrix_<model_name>.png`: Confusion matrix visualization
 
 3. Prediction Results:
-   - `sample_image.png`: Sample image used for prediction
-   - `prediction_{model_name}.png`: Prediction result visualization
-   - `prediction_details_{model_name}.txt`: Detailed prediction information
+   - `sample_image_<data_flag>.png`: Sample image used for prediction
+   - `prediction_<data_flag>_<model_name>.png`: Prediction result visualization
+   - `prediction_details_<data_flag>_<model_name>.txt`: Detailed prediction information
 
 ## Notes
 
