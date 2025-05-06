@@ -59,6 +59,36 @@ def get_data_transforms():
     
     return train_transform, val_transform 
 
+class CustomTransform:
+    """
+    Custom transform for handling both 2D and 3D data
+    """
+    def __init__(self, is_3d=False):
+        self.is_3d = is_3d
+
+    def __call__(self, img):
+        if self.is_3d:
+            # For 3D data, convert to tensor and normalize
+            if isinstance(img, np.ndarray):
+                img = torch.from_numpy(img).float()
+            elif isinstance(img, torch.Tensor):
+                img = img.float()
+            else:
+                raise TypeError(f"Unsupported image type: {type(img)}")
+            
+            # Normalize to [-1, 1]
+            img = (img - img.mean()) / (img.std() + 1e-8)
+            return img
+        else:
+            # For 2D data, use standard transforms
+            if isinstance(img, np.ndarray):
+                img = Image.fromarray(img)
+            transform = transforms.Compose([
+                transforms.ToTensor(),
+                transforms.Normalize(mean=[.5], std=[.5])
+            ])
+            return transform(img)
+
 def get_medmnist_dataset(data_flag, download=True):
     """
     Get MedMNIST dataset
@@ -76,11 +106,12 @@ def get_medmnist_dataset(data_flag, download=True):
     # Check if dataset exists
     dataset_exists = os.path.exists(os.path.join(data_dir, f'{data_flag}.npz'))
     
+    # Check if the dataset is 3D
+    is_3d = data_flag in ['organmnist3d', 'nodulemnist3d', 'adrenalmnist3d', 
+                         'fracturemnist3d', 'vesselmnist3d', 'synapsemnist3d']
+    
     # Data transforms
-    data_transform = transforms.Compose([
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[.5], std=[.5])
-    ])
+    data_transform = CustomTransform(is_3d=is_3d)
     
     # Load datasets
     if dataset_exists:
@@ -138,6 +169,10 @@ def save_medmnist_sample(data_flag, save_dir='data/samples', num_samples=5):
     # Check if dataset exists
     dataset_exists = os.path.exists(os.path.join(data_dir, f'{data_flag}_train.npz'))
     
+    # Check if the dataset is 3D
+    is_3d = data_flag in ['organmnist3d', 'nodulemnist3d', 'adrenalmnist3d', 
+                         'fracturemnist3d', 'vesselmnist3d', 'synapsemnist3d']
+    
     # Load dataset without transforms for visualization
     if dataset_exists:
         print(f"Loading {data_flag} dataset from {data_dir}")
@@ -149,6 +184,11 @@ def save_medmnist_sample(data_flag, save_dir='data/samples', num_samples=5):
     # Save samples
     for i in range(min(num_samples, len(dataset))):
         img, label = dataset[i]
+        
+        if is_3d:
+            # For 3D data, save the middle slice
+            middle_slice = img.shape[-1] // 2
+            img = img[..., middle_slice]
         
         # Convert to PIL Image if it's not already
         if isinstance(img, torch.Tensor):

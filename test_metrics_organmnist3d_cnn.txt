@@ -1,0 +1,7 @@
+Dataset: organmnist3d
+Model: cnn
+Task: multi-class
+Accuracy: 0.8852
+Precision: 0.8868
+Recall: 0.8852
+F1 Score: 0.8849

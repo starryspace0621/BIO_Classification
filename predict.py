@@ -1,7 +1,7 @@
 import torch
 import torch.nn as nn
-from models.simple_cnn import Net
-from models.resnet import ResNet18, ResNet34
+from models.simple_cnn import Net, Net3D
+from models.resnet import ResNet18, ResNet34, ResNet183D, ResNet343D
 from medmnist import INFO
 from PIL import Image
 import torchvision.transforms as transforms
@@ -13,26 +13,41 @@ import torchvision.utils as vutils
 import argparse
 import medmnist
 
-def get_model(model_name, in_channels, num_classes):
+def get_model(model_name, in_channels, num_classes, is_3d=False):
     """
     Get model based on name
     """
-    if model_name == 'cnn':
-        return Net(in_channels=in_channels, num_classes=num_classes)
-    elif model_name == 'resnet18':
-        return ResNet18(in_channels=in_channels, num_classes=num_classes)
-    elif model_name == 'resnet34':
-        return ResNet34(in_channels=in_channels, num_classes=num_classes)
+    if is_3d:
+        if model_name == 'cnn':
+            return Net3D(in_channels=in_channels, num_classes=num_classes)
+        elif model_name == 'resnet18':
+            return ResNet183D(in_channels=in_channels, num_classes=num_classes)
+        elif model_name == 'resnet34':
+            return ResNet343D(in_channels=in_channels, num_classes=num_classes)
+        else:
+            raise ValueError(f"Unknown model name: {model_name}")
     else:
-        raise ValueError(f"Unknown model name: {model_name}")
+        if model_name == 'cnn':
+            return Net(in_channels=in_channels, num_classes=num_classes)
+        elif model_name == 'resnet18':
+            return ResNet18(in_channels=in_channels, num_classes=num_classes)
+        elif model_name == 'resnet34':
+            return ResNet34(in_channels=in_channels, num_classes=num_classes)
+        else:
+            raise ValueError(f"Unknown model name: {model_name}")
 
-def save_sample_image(dataset, save_path):
+def save_sample_image(dataset, save_path, is_3d=False):
     """
     Save a sample image from the dataset
     """
     # Get a random sample
     sample_idx = np.random.randint(len(dataset))
     sample_image, sample_label = dataset[sample_idx]
+    
+    if is_3d:
+        # For 3D images, save a middle slice
+        middle_slice = sample_image.shape[-1] // 2
+        sample_image = sample_image[..., middle_slice]
     
     # Convert tensor to PIL Image
     if sample_image.shape[0] == 1:  # Grayscale
@@ -49,6 +64,8 @@ def save_sample_image(dataset, save_path):
     else:  # RGB
         image = Image.fromarray(sample_image)
     
+    # 确保目录存在
+    os.makedirs(os.path.dirname(save_path), exist_ok=True)
     image.save(save_path)
     return sample_label
 
@@ -62,17 +79,49 @@ def predict_image(model_path, image_path, data_flag, model_name, device='cuda'):
     n_channels = info['n_channels']
     n_classes = len(info['label'])
     
+    # 创建结果保存目录
+    results_dir = os.path.join('results', data_flag, model_name)
+    os.makedirs(results_dir, exist_ok=True)
+    
+    # Check if the dataset is 3D
+    is_3d = data_flag in ['organmnist3d', 'nodulemnist3d', 'adrenalmnist3d', 
+                         'fracturemnist3d', 'vesselmnist3d', 'synapsemnist3d']
+    
     # Load and preprocess image
-    image = Image.open(image_path).convert('L' if n_channels == 1 else 'RGB')
-    transform = transforms.Compose([
-        transforms.Resize((28, 28)),
-        transforms.ToTensor(),
-        transforms.Normalize(mean=[.5], std=[.5])
-    ])
-    image_tensor = transform(image).unsqueeze(0).to(device)
+    if is_3d:
+        # For 3D images, we need to load the entire volume
+        try:
+            image = np.load(image_path, allow_pickle=True)
+        except:
+            # 如果直接加载失败，尝试从数据集获取一个样本
+            _, _, test_dataset, _ = get_medmnist_dataset(data_flag)
+            sample_idx = np.random.randint(len(test_dataset))
+            image, _ = test_dataset[sample_idx]
+            if isinstance(image, torch.Tensor):
+                image = image.numpy()
+    else:
+        image = Image.open(image_path).convert('L' if n_channels == 1 else 'RGB')
+        transform = transforms.Compose([
+            transforms.Resize((28, 28)),
+            transforms.ToTensor(),
+            transforms.Normalize(mean=[.5], std=[.5])
+        ])
+        image_tensor = transform(image).unsqueeze(0).to(device)
+    
+    # 对于3D数据，确保数据格式正确
+    if is_3d:
+        if isinstance(image, np.ndarray):
+            # 确保数据是float类型
+            image = image.astype(np.float32)
+            # 添加batch维度
+            image = np.expand_dims(image, axis=0)
+            # 转换为tensor
+            image_tensor = torch.from_numpy(image).to(device)
+        else:
+            raise TypeError(f"Unsupported image type for 3D data: {type(image)}")
     
     # Load model
-    model = get_model(model_name, n_channels, n_classes).to(device)
+    model = get_model(model_name, n_channels, n_classes, is_3d).to(device)
     model.load_state_dict(torch.load(model_path))
     model.eval()
     
@@ -100,7 +149,23 @@ def predict_image(model_path, image_path, data_flag, model_name, device='cuda'):
     
     # Plot original image
     plt.subplot(1, 2, 1)
-    plt.imshow(image, cmap='gray' if n_channels == 1 else None)
+    if is_3d:
+        # For 3D images, show the middle slice
+        middle_slice = image.shape[-1] // 2
+        # 调整维度顺序：从(C, H, W, D)变为(H, W)
+        if len(image.shape) == 4:  # (B, C, H, W, D)
+            slice_image = image[0, 0, :, :, middle_slice]  # 取第一个batch，第一个通道
+        else:  # (C, H, W, D)
+            slice_image = image[0, :, :, middle_slice]  # 取第一个通道
+        # 确保图像是2D的
+        if len(slice_image.shape) == 3:
+            slice_image = slice_image.squeeze()
+        plt.imshow(slice_image, cmap='gray' if n_channels == 1 else None)
+    else:
+        # 对于2D图像，确保维度正确
+        if isinstance(image, torch.Tensor):
+            image = image.squeeze().cpu().numpy()
+        plt.imshow(image, cmap='gray' if n_channels == 1 else None)
     plt.title('Input Image')
     plt.axis('off')
     
@@ -113,11 +178,11 @@ def predict_image(model_path, image_path, data_flag, model_name, device='cuda'):
     plt.xticks(range(n_classes), [info['label'][str(i)] for i in range(n_classes)], rotation=45)
     
     plt.tight_layout()
-    plt.savefig(f'prediction_{data_flag}_{model_name}.png')
+    plt.savefig(os.path.join(results_dir, f'prediction_{data_flag}_{model_name}.png'))
     plt.close()
     
     # Save prediction details to file
-    with open(f'prediction_details_{data_flag}_{model_name}.txt', 'w') as f:
+    with open(os.path.join(results_dir, f'prediction_details_{data_flag}_{model_name}.txt'), 'w') as f:
         f.write(f'Model: {model_name}\n')
         f.write(f'Dataset: {data_flag}\n')
         f.write(f'Task: {task}\n\n')
@@ -138,7 +203,7 @@ def predict_image(model_path, image_path, data_flag, model_name, device='cuda'):
 if __name__ == '__main__':
     # Add command-line arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument('--data_flag', type=str, default='chestmnist',
+    parser.add_argument('--data_flag', type=str, default='organmnist3d',
                       help='Dataset name, e.g., pathmnist, chestmnist, etc.')
     parser.add_argument('--model_name', type=str, default='cnn',
                       help='Model name: cnn, resnet18, resnet34')
@@ -184,12 +249,24 @@ if __name__ == '__main__':
             print("Please check your network connection or try downloading the dataset manually")
             exit(1)
     
+    # Check if the dataset is 3D
+    is_3d = data_flag in ['organmnist3d', 'nodulemnist3d', 'adrenalmnist3d', 
+                         'fracturemnist3d', 'vesselmnist3d', 'synapsemnist3d']
+    
+    # 创建结果目录
+    results_dir = os.path.join('results', data_flag, model_name)
+    os.makedirs(results_dir, exist_ok=True)
+    
     # Get dataset and save a sample image
     _, _, test_dataset, _ = get_medmnist_dataset(data_flag)
-    sample_label = save_sample_image(test_dataset, f'sample_image_{data_flag}.png')
+    sample_label = save_sample_image(test_dataset, 
+                                   os.path.join(results_dir, f'sample_image_{data_flag}.png'), 
+                                   is_3d)
     
     # Make prediction
-    prediction, probabilities = predict_image(model_path, f'sample_image_{data_flag}.png', data_flag, model_name, device)
+    prediction, probabilities = predict_image(model_path, 
+                                           os.path.join(results_dir, f'sample_image_{data_flag}.png'), 
+                                           data_flag, model_name, device)
     
     # Print results
     print(f'\nPrediction Results ({data_flag}, {model_name}):')

@@ -1,0 +1,18 @@
+Model: cnn
+Dataset: organmnist3d
+Task: multi-class
+
+Predicted Class: femur-left
+
+Probabilities:
+liver: 0.0000
+kidney-right: 0.0000
+kidney-left: 0.0000
+femur-right: 0.0000
+femur-left: 0.9977
+bladder: 0.0000
+heart: 0.0001
+lung-right: 0.0000
+lung-left: 0.0000
+spleen: 0.0021
+pancreas: 0.0000
