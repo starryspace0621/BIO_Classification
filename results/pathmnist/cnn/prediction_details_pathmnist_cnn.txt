@@ -1,0 +1,16 @@
+Model: cnn
+Dataset: pathmnist
+Task: multi-class
+
+Predicted Class: mucus
+
+Probabilities:
+adipose: 0.1166
+background: 0.3299
+debris: 0.0082
+lymphocytes: 0.0003
+mucus: 0.4953
+smooth muscle: 0.0475
+normal colon mucosa: 0.0000
+cancer-associated stroma: 0.0001
+colorectal adenocarcinoma epithelium: 0.0021

@@ -6,6 +6,8 @@ from medmnist import INFO
 from PIL import Image
 import torchvision.transforms as transforms
 import numpy as np
+import matplotlib
+matplotlib.use('Agg')  # 使用非交互式后端
 import matplotlib.pyplot as plt
 import os
 from utils.data_utils import get_medmnist_dataset

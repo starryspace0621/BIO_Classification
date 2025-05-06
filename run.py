@@ -34,7 +34,7 @@ def get_model(model_name, in_channels, num_classes, is_3d=False):
         else:
             raise ValueError(f"Unknown model name: {model_name}")
 
-def train_model(model, train_loader, test_loader, criterion, optimizer, num_epochs, device, task, data_flag, model_name, scheduler):
+def train_model(model, train_loader, test_loader, criterion, optimizer, num_epochs, device, task, data_flag, model_name, scheduler, progress_callback=None):
     """
     Train the model
     """
@@ -90,7 +90,7 @@ def train_model(model, train_loader, test_loader, criterion, optimizer, num_epoc
                 
                 if task == 'multi-label, binary-class':
                     targets = targets.to(torch.float32)
-                    outputs = torch.sigmoid(outputs)  # 使用sigmoid激活函数
+                    outputs = torch.sigmoid(outputs)  # Use sigmoid activation function
                 else:
                     targets = targets.squeeze().long()
                     outputs = outputs.softmax(dim=-1)
@@ -121,7 +121,7 @@ def train_model(model, train_loader, test_loader, criterion, optimizer, num_epoc
         metrics = evaluator.evaluate(y_score)
         test_acc = metrics[1] * 100  # Convert to percentage
         
-        # 获取当前学习率
+        # Get current learning rate
         current_lr = optimizer.param_groups[0]['lr']
         
         print(f'Epoch [{epoch+1}/{num_epochs}]')
@@ -146,9 +146,13 @@ def train_model(model, train_loader, test_loader, criterion, optimizer, num_epoc
         scheduler.step(test_acc)
         new_lr = optimizer.param_groups[0]['lr']
         
-        # 如果学习率发生变化，打印信息
+        # If learning rate changes, print message
         if new_lr != old_lr:
             print(f'Learning rate decreased from {old_lr:.6f} to {new_lr:.6f}')
+        
+        # Call progress callback if provided
+        if progress_callback:
+            progress_callback(epoch + 1, num_epochs, train_acc, test_acc, current_lr)
 
 def main():
     # Add command-line arguments
