@@ -49,6 +49,8 @@ def train_model(model, train_loader, test_loader, criterion, optimizer, num_epoc
         train_total = 0
         test_correct = 0
         test_total = 0
+        train_loss = 0.0
+        val_loss = 0.0
         
         # Training phase
         model.train()
@@ -72,11 +74,13 @@ def train_model(model, train_loader, test_loader, criterion, optimizer, num_epoc
                 train_correct += (predicted == targets).sum().item()
                 train_total += targets.size(0)
             
+            train_loss += loss.item()
             loss.backward()
             optimizer.step()
         
-        # Calculate the training accuracy
+        # Calculate the training accuracy and loss
         train_acc = 100 * train_correct / train_total
+        train_loss = train_loss / len(train_loader)
         
         # Testing phase
         model.eval()
@@ -90,14 +94,20 @@ def train_model(model, train_loader, test_loader, criterion, optimizer, num_epoc
                 
                 if task == 'multi-label, binary-class':
                     targets = targets.to(torch.float32)
+                    loss = criterion(outputs, targets)
                     outputs = torch.sigmoid(outputs)  # Use sigmoid activation function
                 else:
                     targets = targets.squeeze().long()
+                    loss = criterion(outputs, targets)
                     outputs = outputs.softmax(dim=-1)
                     targets = targets.float().resize_(len(targets), 1)
                 
+                val_loss += loss.item()
                 y_true = torch.cat((y_true, targets), 0)
                 y_score = torch.cat((y_score, outputs), 0)
+        
+        # Calculate validation loss
+        val_loss = val_loss / len(test_loader)
         
         # Move tensors to CPU for evaluation
         y_true = y_true.cpu().numpy()
@@ -127,6 +137,8 @@ def train_model(model, train_loader, test_loader, criterion, optimizer, num_epoc
         print(f'Epoch [{epoch+1}/{num_epochs}]')
         print(f'Learning Rate: {current_lr:.6f}')
         print(f'Training Accuracy: {train_acc:.2f}%')
+        print(f'Training Loss: {train_loss:.4f}')
+        print(f'Validation Loss: {val_loss:.4f}')
         print(f'Testing Accuracy: {test_acc:.2f}%')
 
         # Define save directory
@@ -152,7 +164,7 @@ def train_model(model, train_loader, test_loader, criterion, optimizer, num_epoc
         
         # Call progress callback if provided
         if progress_callback:
-            progress_callback(epoch + 1, num_epochs, train_acc, test_acc, current_lr)
+            progress_callback(epoch + 1, num_epochs, train_acc, test_acc, current_lr, train_loss, val_loss)
 
 def main():
     # Add command-line arguments

@@ -61,14 +61,16 @@ def get_saved_models():
     models = [f for f in os.listdir(models_dir) if f.endswith('.pth')]
     return jsonify({'models': models})
 
-def training_progress_callback(epoch, total_epochs, train_acc, test_acc, lr):
+def training_progress_callback(epoch, total_epochs, train_acc, test_acc, lr, train_loss, val_loss):
     """Callback function to send training progress to frontend"""
     progress = {
         'epoch': epoch,
         'total_epochs': total_epochs,
         'train_acc': train_acc,
         'test_acc': test_acc,
-        'lr': lr
+        'lr': lr,
+        'train_loss': train_loss,
+        'val_loss': val_loss
     }
     socketio.emit('training_progress', progress)
 

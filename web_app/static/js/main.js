@@ -1,6 +1,55 @@
 // Initialize Socket.IO connection
 const socket = io();
 
+// Initialize accuracy chart
+let accuracyChart = null;
+let trainAccData = [];
+let testAccData = [];
+let epochLabels = [];
+
+function initializeAccuracyChart() {
+    const ctx = document.getElementById('lossChart').getContext('2d');
+    accuracyChart = new Chart(ctx, {
+        type: 'line',
+        data: {
+            labels: epochLabels,
+            datasets: [
+                {
+                    label: '训练准确率',
+                    data: trainAccData,
+                    borderColor: 'rgb(75, 192, 192)',
+                    tension: 0.1
+                },
+                {
+                    label: '验证准确率',
+                    data: testAccData,
+                    borderColor: 'rgb(255, 99, 132)',
+                    tension: 0.1
+                }
+            ]
+        },
+        options: {
+            responsive: true,
+            scales: {
+                y: {
+                    beginAtZero: true,
+                    max: 100,
+                    title: {
+                        display: true,
+                        text: '准确率 (%)'
+                    }
+                },
+                x: {
+                    title: {
+                        display: true,
+                        text: 'Epoch'
+                    }
+                }
+            }
+        }
+    });
+}
+
 // Socket.IO event handlers
 socket.on('training_progress', function(data) {
     updateTrainingProgress(data);
@@ -22,8 +71,24 @@ function updateTrainingProgress(data) {
     
     // Update text information
     currentEpoch.textContent = `Epoch: ${data.epoch}/${data.total_epochs}`;
-    currentAccuracy.textContent = `Accuracy: ${data.test_acc.toFixed(2)}%`;
+    currentAccuracy.textContent = `准确率: ${data.test_acc.toFixed(2)}%`;
     currentLR.textContent = data.lr.toFixed(6);
+
+    // Update accuracy chart
+    if (accuracyChart === null) {
+        initializeAccuracyChart();
+    }
+    
+    // Add new data points
+    epochLabels.push(data.epoch);
+    trainAccData.push(data.train_acc);
+    testAccData.push(data.test_acc);
+    
+    // Update chart
+    accuracyChart.data.labels = epochLabels;
+    accuracyChart.data.datasets[0].data = trainAccData;
+    accuracyChart.data.datasets[1].data = testAccData;
+    accuracyChart.update();
 }
 
 // Show toast notification
@@ -118,6 +183,15 @@ document.getElementById('trainForm').addEventListener('submit', function(e) {
         learning_rate: document.getElementById('learningRate').value
     };
     
+    // Reset accuracy chart data
+    trainAccData = [];
+    testAccData = [];
+    epochLabels = [];
+    if (accuracyChart) {
+        accuracyChart.destroy();
+        accuracyChart = null;
+    }
+    
     // Show training progress section
     document.getElementById('trainingProgress').classList.remove('d-none');
     // Hide confirm button initially
@@ -139,7 +213,7 @@ document.getElementById('trainForm').addEventListener('submit', function(e) {
     .then(response => response.json())
     .then(data => {
         if (data.status === 'success') {
-            showToast('Training completed successfully!', 'success');
+            showToast('训练完成！', 'success');
             // Show confirm button when training is complete
             document.getElementById('confirmTraining').classList.remove('d-none');
         } else {
@@ -152,7 +226,7 @@ document.getElementById('trainForm').addEventListener('submit', function(e) {
     })
     .catch(error => {
         console.error('Error:', error);
-        showToast('An error occurred during training', 'error');
+        showToast('训练过程中发生错误', 'error');
         // Re-enable form on error
         for (let i = 0; i < formElements.length; i++) {
             formElements[i].disabled = false;
@@ -177,8 +251,16 @@ document.getElementById('confirmTraining').addEventListener('click', function() 
     progressBar.setAttribute('aria-valuenow', 0);
     // Reset text information
     document.getElementById('currentEpoch').textContent = 'Epoch: 0/0';
-    document.getElementById('currentAccuracy').textContent = 'Accuracy: 0%';
+    document.getElementById('currentAccuracy').textContent = '准确率: 0%';
     document.getElementById('currentLR').textContent = '0.001';
+    // Reset accuracy chart
+    if (accuracyChart) {
+        accuracyChart.destroy();
+        accuracyChart = null;
+    }
+    trainAccData = [];
+    testAccData = [];
+    epochLabels = [];
 });
 
 // Handle prediction form submission
